@@ -20,6 +20,7 @@ import AdminReports from "./pages/admin/AdminReports";
 
 function App() {
   const { loading } = useSelector((state) => state.loader);
+
   return (
     <>
       {loading && <Loader />}

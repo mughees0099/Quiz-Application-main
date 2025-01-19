@@ -2,6 +2,7 @@ const router = require("express").Router();
 const Exam = require("../models/examModel");
 const authMiddleware = require("../middlewares/authMiddleware");
 const Question = require("../models/questionModel");
+const bcrypt = require("bcryptjs");
 
 // add exam
 
@@ -15,7 +16,11 @@ router.post("/add", authMiddleware, async (req, res) => {
         .send({ message: "Exam already exists", success: false });
     }
     req.body.questions = [];
+    const salt = await bcrypt.genSalt(14);
+    const hashedPassword = await bcrypt.hash(req.body.examPassword, salt);
+    req.body.examPassword = hashedPassword;
     const newExam = new Exam(req.body);
+
     await newExam.save();
     res.send({
       message: "Exam added successfully",
@@ -39,6 +44,32 @@ router.post("/get-all-exams", authMiddleware, async (req, res) => {
       data: exams,
       success: true,
     });
+  } catch (error) {
+    res.status(500).send({
+      message: error.message,
+      data: error,
+      success: false,
+    });
+  }
+});
+
+router.post("/verify-password", authMiddleware, async (req, res) => {
+  try {
+    const { examId, password } = req.body;
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res
+        .status(404)
+        .send({ message: "Exam not found", success: false });
+    }
+
+    const isMatch = await bcrypt.compare(password, exam.examPassword);
+
+    if (!isMatch) {
+      return res.send({ message: "Invalid password", success: false });
+    }
+
+    res.send({ message: "Password verified successfully", success: true });
   } catch (error) {
     res.status(500).send({
       message: error.message,
@@ -143,27 +174,23 @@ router.post("/edit-question-in-exam", authMiddleware, async (req, res) => {
   }
 });
 
-
 // delete question in exam
 router.post("/delete-question-in-exam", authMiddleware, async (req, res) => {
-     try {
-        // delete question in Questions collection
-        await Question.findByIdAndDelete(req.body.questionId);
+  try {
+    // delete question in Questions collection
+    await Question.findByIdAndDelete(req.body.questionId);
 
-        // delete question in exam
-        const exam = await Exam.findById(req.body.examId);
-        exam.questions = exam.questions.filter(
-          (question) => question._id != req.body.questionId
-        );
-        await exam.save();
-        res.send({
-          message: "Question deleted successfully",
-          success: true,
-        });
-     } catch (error) {
-      
-     }
+    // delete question in exam
+    const exam = await Exam.findById(req.body.examId);
+    exam.questions = exam.questions.filter(
+      (question) => question._id != req.body.questionId
+    );
+    await exam.save();
+    res.send({
+      message: "Question deleted successfully",
+      success: true,
+    });
+  } catch (error) {}
 });
-
 
 module.exports = router;

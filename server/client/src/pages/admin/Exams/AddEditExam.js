@@ -1,5 +1,5 @@
-import { Col, Form, message, Row, Select, Table, Tabs } from "antd";
-import React, { useEffect } from "react";
+import { Col, Form, message, Row, Table, Tabs } from "antd";
+import React, { useEffect, useState } from "react";
 import {
   addExam,
   deleteQuestionById,
@@ -11,14 +11,16 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { HideLoading, ShowLoading } from "../../../redux/loaderSlice";
 import AddEditQuestion from "./AddEditQuestion";
+import { RiEyeLine, RiEyeOffLine } from "react-icons/ri";
 
 function AddEditExam() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const [examData, setExamData] = React.useState(null);
+  const [examData, setExamData] = useState(null);
   const [showAddEditQuestionModal, setShowAddEditQuestionModal] =
-    React.useState(false);
-  const [selectedQuestion, setSelectedQuestion] = React.useState(null);
+    useState(false);
+  const [selectedQuestion, setSelectedQuestion] = useState(null);
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const params = useParams();
 
   const onFinish = async (values) => {
@@ -27,11 +29,17 @@ function AddEditExam() {
       let response;
 
       if (params.id) {
+        const { duration } = values;
+        values.duration = duration * 60;
+
         response = await editExamById({
-          ...values,
           examId: params.id,
+          ...values,
         });
       } else {
+        const { duration } = values;
+        values.duration = duration * 60;
+
         response = await addExam(values);
       }
       if (response.success) {
@@ -55,6 +63,8 @@ function AddEditExam() {
       });
       dispatch(HideLoading());
       if (response.success) {
+        const { duration } = response.data;
+        response.data.duration = Math.round(duration / 60);
         setExamData(response.data);
       } else {
         message.error(response.message);
@@ -171,6 +181,7 @@ function AddEditExam() {
                 <option value="React">React</option>
                 <option value="Node">Node</option>
                 <option value="MongoDB">MongoDB</option>
+                <option value="PMP">PMP</option>
               </select>
             </Form.Item>
           </Col>
@@ -190,6 +201,28 @@ function AddEditExam() {
               />
             </Form.Item>
           </Col>
+          <Col span={8}>
+            {!params.id && (
+              <Form.Item name="examPassword" label="Exam Password">
+                <div className="relative">
+                  <input
+                    type={passwordVisible ? "text" : "password"}
+                    className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300"
+                  />
+                  <div
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer"
+                    onClick={() => setPasswordVisible(!passwordVisible)}
+                  >
+                    {passwordVisible ? (
+                      <RiEyeOffLine className="text-gray-500" />
+                    ) : (
+                      <RiEyeLine className="text-gray-500" />
+                    )}
+                  </div>
+                </div>
+              </Form.Item>
+            )}
+          </Col>
         </Row>
       ),
     },
@@ -200,7 +233,7 @@ function AddEditExam() {
         <>
           <div className="flex justify-end mb-4">
             <button
-              className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition duration-300"
+              className="bg-blue-500 text-white py-2 px-4 rounded md:hover:bg-blue-600 transition duration-300"
               type="button"
               onClick={() => setShowAddEditQuestionModal(true)}
             >
@@ -228,14 +261,14 @@ function AddEditExam() {
           <Tabs defaultActiveKey="1" items={tabItems} />
           <div className="flex justify-end gap-2 mt-4">
             <button
-              className="bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600 transition duration-300"
+              className="bg-gray-500 text-white py-2 px-4 rounded md:hover:bg-gray-600 transition duration-300"
               type="button"
               onClick={() => navigate("/admin/exams")}
             >
               Cancel
             </button>
             <button
-              className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition duration-300"
+              className="bg-blue-500 text-white py-2 px-4 rounded md:hover:bg-blue-600 transition duration-300"
               type="submit"
             >
               Save

@@ -4,7 +4,7 @@ import { useDispatch } from "react-redux";
 import { addQuestionToExam, editQuestionById } from "../../../apicalls/exams";
 import { HideLoading, ShowLoading } from "../../../redux/loaderSlice";
 import { UploadOutlined } from "@ant-design/icons";
-import { Document, Packer, Paragraph } from "docx";
+import mammoth from "mammoth";
 
 function AddEditQuestion({
   showAddEditQuestionModal,
@@ -96,8 +96,8 @@ function AddEditQuestion({
   const handleFileUpload = async (file) => {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const doc = await Document.load(arrayBuffer);
-      const questions = parseQuestions(doc);
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      const questions = parseQuestions(result.value);
       await saveQuestions(questions);
       message.success("Questions uploaded successfully");
       refreshData();
@@ -107,14 +107,47 @@ function AddEditQuestion({
     }
   };
 
-  const parseQuestions = (doc) => {
-    // Implement your logic to parse questions from the doc
-    // This is a placeholder implementation
-    const questions = doc.paragraphs.map((p) => {
-      const text = p.text;
-      const [name, correctOption, A, B, C, D] = text.split("\n");
-      return { name, correctOption, options: { A, B, C, D } };
-    });
+  const parseQuestions = (text) => {
+    const questions = [];
+    const lines = text.split("\n").filter((line) => line.trim() !== "");
+
+    for (let i = 0; i < lines.length; i++) {
+      let name = lines[i].trim();
+      const correctOption = lines[i + 1]?.trim();
+      const optionA = lines[i + 2]?.trim();
+      const optionB = lines[i + 3]?.trim();
+      const optionC = lines[i + 4]?.trim();
+      const optionD = lines[i + 5]?.trim();
+
+      if (
+        !name ||
+        !correctOption ||
+        !optionA ||
+        !optionB ||
+        !optionC ||
+        !optionD
+      ) {
+        continue; // Skip this set if any line is missing
+      }
+
+      const A = optionA.split(") ")[1];
+      const B = optionB.split(") ")[1];
+      const C = optionC.split(") ")[1];
+      const D = optionD.split(") ")[1];
+
+      if (!A || !B || !C || !D) {
+        continue; // Skip this set if any option is missing
+      }
+
+      questions.push({
+        name,
+        correctOption,
+        options: { A, B, C, D },
+      });
+
+      i += 5; // Move to the next question set
+    }
+
     return questions;
   };
 
@@ -153,6 +186,7 @@ function AddEditQuestion({
             className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </Form.Item>
+
         <Form.Item
           name="correctOption"
           label="Correct Option"
@@ -213,34 +247,47 @@ function AddEditQuestion({
           </Form.Item>
         </div>
 
-        <Form.Item label="Upload Questions">
-          <Upload
-            beforeUpload={(file) => {
-              handleFileUpload(file);
-              return false;
-            }}
-            accept=".doc,.docx"
-          >
-            <Button icon={<UploadOutlined />}>Upload .doc/.docx File</Button>
-          </Upload>
-        </Form.Item>
-
         <div className="flex justify-end mt-4 gap-3">
           <button
-            className="bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600 transition duration-300"
+            className="bg-gray-500 text-white py-2 px-4 rounded md:hover:bg-gray-600 transition duration-300"
             type="button"
             onClick={() => setShowAddEditQuestionModal(false)}
           >
             Cancel
           </button>
           <button
-            className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition duration-300"
+            className="bg-blue-500 text-white py-2 px-4 rounded md:hover:bg-blue-600 transition duration-300"
             type="submit"
           >
             Save
           </button>
         </div>
       </Form>
+
+      <div className="mt-4">
+        <div>
+          <h1 className="flex-1 font-semibold">
+            Format of questions should be:{" "}
+          </h1>
+          Which company developed JavaScript? <br />
+          B <br />
+          A) Microsoft <br />
+          B) Netscape <br />
+          C) Sun Microsystems <br />
+          D) Oracle <br />
+        </div>
+
+        <Upload
+          accept=".docx"
+          showUploadList={false}
+          beforeUpload={(file) => {
+            handleFileUpload(file);
+            return false;
+          }}
+        >
+          <Button icon={<UploadOutlined />}>Upload Questions from DOCX</Button>
+        </Upload>
+      </div>
     </Modal>
   );
 }

@@ -27,6 +27,10 @@ const examSchema = new mongoose.Schema(
       ref: "questions",
       required: true,
     },
+    examPassword: {
+      type: String,
+      required: true,
+    },
   },
   {
     timestamps: true,

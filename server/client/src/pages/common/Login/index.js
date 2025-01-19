@@ -74,13 +74,13 @@ function Login() {
             <div className="flex flex-col gap-4 mt-4">
               <button
                 type="submit"
-                className="w-full py-3 rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition duration-300"
+                className="w-full py-3 rounded-lg text-white bg-blue-600 md:hover:bg-blue-700 transition duration-300"
               >
                 Login
               </button>
               <Link
                 to="/register"
-                className="text-center text-blue-600 hover:underline"
+                className="text-center text-blue-600 md:hover:underline"
               >
                 Not a member? Register
               </Link>

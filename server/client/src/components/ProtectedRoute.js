@@ -9,8 +9,9 @@ import { HideLoading, ShowLoading } from "../redux/loaderSlice";
 function ProtectedRoute({ children }) {
   const { user } = useSelector((state) => state.users);
   const [menu, setMenu] = useState([]);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
+  const [loading, setLoading] = useState(true); // Add loading state
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
@@ -76,11 +77,14 @@ function ProtectedRoute({ children }) {
         }
       } else {
         message.error(response.message);
+        navigate("/login");
       }
     } catch (error) {
       navigate("/login");
       dispatch(HideLoading());
       message.error(error.message);
+    } finally {
+      setLoading(false); // Set loading to false after data is fetched
     }
   };
 
@@ -89,6 +93,7 @@ function ProtectedRoute({ children }) {
       getUserData();
     } else {
       navigate("/login");
+      setLoading(false); // Set loading to false if no token
     }
   }, []);
 
@@ -119,8 +124,12 @@ function ProtectedRoute({ children }) {
     navigate("/login");
   };
 
+  if (loading) {
+    return null; // Render nothing while loading
+  }
+
   if (!user) {
-    return null;
+    return null; // Render nothing if user is not set
   }
 
   return (
@@ -128,10 +137,10 @@ function ProtectedRoute({ children }) {
       {/* Sidebar */}
       <div
         className={`bg-blue-600 p-4 shadow-lg ${
-          collapsed ? "w-16" : "w-64"
-        } transition-all duration-300`}
+          collapsed ? "w-12" : "w-64"
+        } transition-all duration-300 `}
       >
-        <div className="flex justify-between items-center mb-4">
+        <div className="justify-between items-center mb-4 hidden sm:flex">
           {!collapsed ? (
             <i
               className="ri-close-line text-white text-2xl cursor-pointer"
@@ -146,20 +155,22 @@ function ProtectedRoute({ children }) {
         </div>
 
         <div
-          className={`mt-8 ${
+          className={`mt-16 sm:mt-8 ${
             collapsed && "flex flex-col items-center"
           } text-white`}
         >
           {menu.map((item, index) => (
             <div
-              key={index}
-              className={`flex  gap-2 p-2 rounded cursor-pointer hover:bg-blue-500 transition-colors duration-300 ${
+              key={crypto.randomUUID()}
+              className={`flex  gap-2 p-2 rounded cursor-pointer md:hover:bg-blue-500 transition-colors duration-300 ${
                 getIsActiveOrNot(item.paths) ? "bg-blue-500" : ""
               } `}
               onClick={item.onClick}
             >
               {item.icon}
-              {!collapsed && <span>{item.title}</span>}
+              {!collapsed && (
+                <span className="hidden sm:block">{item.title}</span>
+              )}
             </div>
           ))}
         </div>
@@ -168,16 +179,8 @@ function ProtectedRoute({ children }) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="bg-blue-600 p-4 shadow-lg flex justify-between items-center">
+        <div className="bg-blue-600 py-4 shadow-lg flex justify-between items-center">
           <h1 className="text-2xl text-white">QUIZ Application</h1>
-          <div className="flex items-center">
-            <h1 className="text-md text-white font-semibold mr-4">
-              {user.name}
-            </h1>
-            <span className="text-sm text-gray-200">
-              Role: {user.isAdmin ? "Admin" : "User"}
-            </span>
-          </div>
         </div>
 
         {/* Content */}
@@ -187,7 +190,7 @@ function ProtectedRoute({ children }) {
       {/* Logout Modal */}
       <Modal
         title="Confirm Logout"
-        visible={isLogoutModalVisible}
+        open={isLogoutModalVisible}
         onOk={handleLogout}
         onCancel={() => setIsLogoutModalVisible(false)}
         footer={[

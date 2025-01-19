@@ -1,9 +1,9 @@
 import { message } from "antd";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import { getExamById } from "../../../apicalls/exams";
-import { addReport } from "../../../apicalls/reports";
+import { addReport, getAllReportsByUser } from "../../../apicalls/reports";
 import { HideLoading, ShowLoading } from "../../../redux/loaderSlice";
 import Instructions from "./Instructions";
 
@@ -13,6 +13,7 @@ function WriteExam() {
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(0);
   const [selectedOptions, setSelectedOptions] = useState({});
   const [result, setResult] = useState({});
+  const [resultCalculated, setResultCalculated] = useState(false);
   const params = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -20,9 +21,26 @@ function WriteExam() {
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [timeUp, setTimeUp] = useState(false);
   const [intervalId, setIntervalId] = useState(null);
+  const [unfocusCount, setUnfocusCount] = useState(0);
+
   const { user } = useSelector((state) => state.users);
 
-  const getExamData = async () => {
+  const shuffleArray = (array) => {
+    const shuffledArray = [];
+    const usedIndices = new Set();
+
+    while (shuffledArray.length < array.length) {
+      const randomIndex = Math.floor(Math.random() * array.length);
+      if (!usedIndices.has(randomIndex)) {
+        shuffledArray.push(array[randomIndex]);
+        usedIndices.add(randomIndex);
+      }
+    }
+
+    return shuffledArray;
+  };
+
+  const getExamData = useCallback(async () => {
     try {
       dispatch(ShowLoading());
       const response = await getExamById({
@@ -30,7 +48,7 @@ function WriteExam() {
       });
       dispatch(HideLoading());
       if (response.success) {
-        setQuestions(response.data.questions);
+        setQuestions(shuffleArray(response.data.questions));
         setExamData(response.data);
         setSecondsLeft(response.data.duration);
       } else {
@@ -40,9 +58,12 @@ function WriteExam() {
       dispatch(HideLoading());
       message.error(error.message);
     }
-  };
+  }, [dispatch, params.id]);
 
-  const calculateResult = async () => {
+  const calculateResult = useCallback(async () => {
+    if (resultCalculated) return;
+    setResultCalculated(true);
+
     try {
       let correctAnswers = [];
       let wrongAnswers = [];
@@ -82,7 +103,15 @@ function WriteExam() {
       dispatch(HideLoading());
       message.error(error.message);
     }
-  };
+  }, [
+    questions,
+    selectedOptions,
+    examData,
+    params.id,
+    user._id,
+    dispatch,
+    resultCalculated,
+  ]);
 
   const startTimer = () => {
     let totalSeconds = examData.duration;
@@ -98,9 +127,12 @@ function WriteExam() {
   };
 
   const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
     const remainingSeconds = seconds % 60;
-    return `${minutes}`;
+    return `${hours < 1 ? "" : hours < 10 ? "0" + hours + ":" : hours}${
+      minutes < 10 ? "0" + minutes : minutes
+    }:${remainingSeconds < 10 ? "0" + remainingSeconds : remainingSeconds}`;
   };
 
   useEffect(() => {
@@ -108,25 +140,56 @@ function WriteExam() {
       clearInterval(intervalId);
       calculateResult();
     }
-  }, [timeUp]);
+  }, [timeUp, intervalId, view, calculateResult]);
+
+  useEffect(() => {
+    async function getExamData() {
+      const examHistory = await getAllReportsByUser(user._id);
+      const exam = examHistory.data.map((item) => item.exam._id);
+      if (exam.includes(params.id)) {
+        navigate("/");
+      }
+    }
+    getExamData();
+  }, [navigate, params.id, user._id]);
 
   useEffect(() => {
     if (params.id) {
       getExamData();
     }
-  }, [params.id]);
+  }, [params.id, getExamData]);
 
   useEffect(() => {
-    const handleBlur = () => {
-      setTimeUp(true);
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setUnfocusCount((prevCount) => {
+          const newCount = prevCount + 1;
+          if (newCount > 0 && newCount < 3) {
+            message.warning(
+              `Warning: You have unfocused the screen ${newCount} time(s). You have ${
+                3 - newCount
+              } unfocus(es) left.`
+            );
+          }
+          if (newCount >= 3) {
+            message.error(
+              "You have unfocused the screen 3 times. The exam will be submitted automatically."
+            );
+            clearInterval(intervalId);
+            calculateResult();
+            setTimeUp(true);
+          }
+          return newCount;
+        });
+      }
     };
 
-    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [intervalId, calculateResult]);
 
   if (!user) {
     return null;
@@ -134,9 +197,10 @@ function WriteExam() {
 
   return (
     examData && (
-      <div className="mt-2">
+      <div className="mt-2 relative">
         <div className="divider"></div>
-        <h1 className="text-center font-bold text-2xl">{examData.name}</h1>
+        <h1 className="text-center font-bold text-2xl ">{examData.name}</h1>
+
         <div className="divider"></div>
 
         {view === "instructions" && (
@@ -148,19 +212,19 @@ function WriteExam() {
         )}
 
         {view === "questions" && questions.length > 0 && (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 ">
             <div className="flex justify-between">
               <h1 className="text-2xl">
                 {selectedQuestionIndex + 1} :{" "}
                 {questions[selectedQuestionIndex]?.name}
               </h1>
 
-              <div className="timer">
-                <span className="text-2xl">{formatTime(secondsLeft)}</span>
+              <div className="timer  ">
+                <span className="text-xl ">{formatTime(secondsLeft)}</span>
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 ">
               {Object.keys(questions[selectedQuestionIndex]?.options || {}).map(
                 (option, index) => {
                   return (
@@ -170,7 +234,7 @@ function WriteExam() {
                           ? "selected-option"
                           : "option"
                       }`}
-                      key={index}
+                      key={crypto.randomUUID()}
                       onClick={() => {
                         setSelectedOptions({
                           ...selectedOptions,
@@ -178,7 +242,7 @@ function WriteExam() {
                         });
                       }}
                     >
-                      <h1 className="text-xl">
+                      <h1 className="text-xl cursor-pointer">
                         {option} :{" "}
                         {questions[selectedQuestionIndex]?.options[option]}
                       </h1>
@@ -210,18 +274,27 @@ function WriteExam() {
                   Next
                 </button>
               )}
+            </div>
+            <div className="relative">
+              <button
+                className=" bg-red-500  text-white absolute right-0"
+                onClick={() => {
+                  const finishExam = window.confirm(
+                    "Are you sure you want to finish the exam?"
+                  );
 
-              {selectedQuestionIndex === questions.length - 1 && (
-                <button
-                  className="primary-contained-btn"
-                  onClick={() => {
+                  function afterFinishExam() {
                     clearInterval(intervalId);
+                    calculateResult();
                     setTimeUp(true);
-                  }}
-                >
-                  Submit
-                </button>
-              )}
+                  }
+                  if (finishExam) {
+                    afterFinishExam();
+                  }
+                }}
+              >
+                Submit Exam
+              </button>
             </div>
           </div>
         )}
@@ -290,7 +363,7 @@ function WriteExam() {
                   className={`flex flex-col gap-1 p-2 ${
                     isCorrect ? "bg-success" : "bg-error"
                   }`}
-                  key={index}
+                  key={crypto.randomUUID()}
                 >
                   <h1 className="text-xl">
                     {index + 1} : {question.name}

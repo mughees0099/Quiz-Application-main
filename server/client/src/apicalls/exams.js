@@ -21,6 +21,21 @@ export const getAllExams = async () => {
   }
 };
 
+//check exam password
+
+export const verifyExamPassword = async (data) => {
+  try {
+    const response = await axiosInstance.post(
+      "/api/exams/verify-password",
+      data
+    );
+
+    return response.data;
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+};
+
 // get exam by id
 
 export const getExamById = async (payload) => {
@@ -99,4 +114,4 @@ export const deleteQuestionById = async (payload) => {
   } catch (error) {
     return error.response.data;
   }
-}
+};
